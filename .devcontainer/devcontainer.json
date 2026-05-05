@@ -1,0 +1,67 @@
+{
+    "name": "VectorDB Comparison",
+    "dockerComposeFile": "../docker-compose.yml",
+    "service": "backend",
+    "workspaceFolder": "/workspace",
+    "features": {
+        "ghcr.io/devcontainers/features/node:2.0.0": {
+            "version": "22"
+        },
+        "ghcr.io/devcontainers/features/git:1": {},
+        "ghcr.io/devcontainers/features/node:1": {},
+        "ghcr.io/anthropics/devcontainer-features/claude-code:1": {}
+    },
+    "customizations": {
+        "vscode": {
+            "settings": {
+                "python.defaultInterpreterPath": "/usr/local/bin/python",
+                "editor.formatOnSave": true,
+                "editor.defaultFormatter": "esbenp.prettier-vscode",
+                "[python]": {
+                    "editor.defaultFormatter": "ms-python.black-formatter"
+                }
+            },
+            "extensions": [
+                "ms-python.python",
+                "ms-python.black-formatter",
+                "ms-python.vscode-pylance",
+                "dbaeumer.vscode-eslint",
+                "esbenp.prettier-vscode",
+                "bradlc.vscode-tailwindcss",
+                "ms-azuretools.vscode-docker"
+            ]
+        }
+    },
+    "forwardPorts": [
+        3000,
+        8000,
+        11434,
+        6333,
+        5432
+    ],
+    "portsAttributes": {
+        "3000": {
+            "label": "Frontend (Next.js)",
+            "onAutoForward": "notify"
+        },
+        "8000": {
+            "label": "Backend (FastAPI)",
+            "onAutoForward": "notify"
+        },
+        "11434": {
+            "label": "Ollama",
+            "onAutoForward": "silent"
+        },
+        "6333": {
+            "label": "Qdrant",
+            "onAutoForward": "silent"
+        },
+        "5432": {
+            "label": "pgvector",
+            "onAutoForward": "silent"
+        }
+    },
+    "postCreateCommand": "pip install -r requirements.txt",
+    "postStartCommand": "docker exec $(docker ps -qf 'ancestor=ollama/ollama') ollama pull llama3.2 || true",
+    "remoteUser": "root"
+}
