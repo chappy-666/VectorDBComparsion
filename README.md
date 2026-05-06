@@ -70,16 +70,24 @@ open http://localhost:3000
 
 ## テストデータの投入と動作確認
 
-サービス起動後、以下の手順でダミーデータを両DBに格納し、検索APIを確認できます。
+### 1. シードデータの投入
+
+15件のダミー文書（ベクトルDB・機械学習・インフラ等）を Qdrant・pgvector 双方に格納します。
 
 ```bash
-# 1. シードデータを投入（15件のダミー文書を Qdrant・pgvector 双方に格納）
 docker compose exec backend python scripts/seed.py
+# => Done. Indexed 15 chunks.
+```
 
-# 2. 検索APIの動作確認（両DBを同一クエリで検索し、結果とレイテンシを比較）
+### 2. ベクトル検索API（`/search`）
+
+同一クエリで両DBを検索し、結果とレイテンシを比較します。
+
+```bash
 curl -s -X POST http://localhost:8000/search \
   -H "Content-Type: application/json" \
-  -d '{"query": "ベクトルデータベースの比較", "db": "both", "top_k": 3}' | python3 -m json.tool
+  -d '{"query": "ベクトルデータベースの比較", "db": "both", "top_k": 3}' \
+  | python3 -m json.tool
 ```
 
 レスポンス例（抜粋）:
@@ -87,14 +95,61 @@ curl -s -X POST http://localhost:8000/search \
 ```json
 {
   "query": "ベクトルデータベースの比較",
-  "qdrant": [ ... ],
-  "pgvector": [ ... ],
+  "qdrant": [
+    {"doc_id": "...", "content": "コサイン類似度は...", "score": 0.565, "metadata": {"title": "コサイン類似度"}}
+  ],
+  "pgvector": [
+    {"doc_id": "...", "content": "コサイン類似度は...", "score": 0.565, "metadata": {"title": "コサイン類似度"}}
+  ],
   "qdrant_latency_ms": 22.0,
   "pgvector_latency_ms": 11.6
 }
 ```
 
 `db` パラメータは `"qdrant"` / `"pgvector"` / `"both"` で切り替え可能。
+
+### 3. RAGエージェントAPI（`/rag`）
+
+LangGraphによるRAGエージェントを使って、検索結果をもとにOllamaが自然言語で回答を生成します。
+
+```bash
+curl -s -X POST http://localhost:8000/rag \
+  -H "Content-Type: application/json" \
+  -d '{"query": "ベクトルDBの選び方を教えてください", "db": "both", "top_k": 3}' \
+  | python3 -m json.tool
+```
+
+レスポンス例（抜粋）:
+
+```json
+{
+  "query": "ベクトルDBの選び方を教えてください",
+  "answer": "ベクトルデータベースを選択する際は、次のような要素を考慮することが重要です。\n- Qdrantはフィルタリングと近似最近傍探索を組み合わせた高速な検索を提供します...",
+  "sources": [
+    {"doc_id": "...", "content": "Qdrantは、高性能な...", "score": 0.569, "metadata": {"title": "Qdrantの概要"}}
+  ],
+  "retry_count": 0,
+  "qdrant_latency_ms": 4.3,
+  "pgvector_latency_ms": 4.7
+}
+```
+
+#### グラフの処理フロー
+
+```
+query_analyzer → retriever → evaluator ─→ generator → 回答返却
+                               ↑___________↙
+                         (スコア平均 < 0.5 かつリトライ上限未達の場合、
+                          LLMがクエリを言い換えて再検索。最大2回)
+```
+
+| フィールド | 説明 |
+|---|---|
+| `answer` | 検索結果をコンテキストとしてOllamaが生成した回答 |
+| `sources` | 回答の根拠となった検索結果（スコア降順） |
+| `retry_count` | クエリの言い換えと再検索を行った回数（最大2） |
+| `qdrant_latency_ms` | Qdrant検索にかかった時間（ms） |
+| `pgvector_latency_ms` | pgvector検索にかかった時間（ms） |
 
 ---
 
